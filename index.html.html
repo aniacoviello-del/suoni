@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corde e Piatto — Il Viaggio del Suono</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F6FAFE;color:#1a1a1a;padding:1.25rem;min-height:100vh}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.hint{font-size:14px;color:#5a6a7a;margin-bottom:.875rem;display:flex;align-items:center;gap:8px}
+.stage{border:1px solid #D0E2F5;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 14px rgba(12,68,124,0.07)}
+canvas{display:block;width:100%;cursor:pointer}
+.panel{display:flex;align-items:stretch;border-top:1px solid #D0E2F5;min-height:56px}
+.panel-who{padding:10px 16px;min-width:156px;background:#F0F6FF;border-right:1px solid #D0E2F5;display:flex;flex-direction:column;justify-content:center}
+.lbl{font-size:11px;color:#6B82A0;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.val{font-size:16px;font-weight:600;color:#888;margin-top:3px;transition:color .2s}
+.panel-body{padding:10px 16px;font-size:13px;color:#4A5E72;line-height:1.65;flex:1;display:flex;align-items:center}
+.panel-body strong{color:#1a1a1a}
+.flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:.875rem}
+.pill{font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid;white-space:nowrap}
+.pb{background:#E6F1FB;color:#0C447C;border-color:#B5D4F4}
+.pg{background:#F2F6FC;color:#5D6D7E;border-color:#D0DFF0}
+.pt{background:#E1F5EE;color:#085041;border-color:#9FE1CB}
+.arr{font-size:13px;color:#9BB0C8;font-weight:500}
+</style>
+</head>
+<body>
+<h1 class="sr-only">Due corde e un piatto di batteria — clicca per far vibrare e ascoltare il suono</h1>
+<p class="hint">
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+  Clicca su una corda o sul piatto — vibrano per tutta la durata del suono.
+</p>
+<div class="stage">
+  <canvas id="sc" height="300"></canvas>
+  <div class="panel">
+    <div class="panel-who"><div class="lbl">Strumento</div><div class="val" id="whoName">—</div></div>
+    <div class="panel-body" id="infoText">Clicca su una corda o sul piatto per sentire la differenza tra vibrazione di una corda tesa e vibrazione di un metallo.</div>
+  </div>
+</div>
+<div class="flow">
+  <span class="pill pb">Vibrazione</span>
+  <span class="arr">→</span>
+  <span class="pill pg">Spinge l'aria</span>
+  <span class="arr">→</span>
+  <span class="pill pg">Onde di pressione</span>
+  <span class="arr">→</span>
+  <span class="pill pt">L'orecchio sente</span>
+</div>
+<script>
+const canvas=document.getElementById('sc');
+const ctx=canvas.getContext('2d');
+const STRINGS=[
+  {note:'E2',label:'Mi grave — corda spessa', hz:'82 Hz', freq:82.4,  color:'#378ADD',thick:5.2,visHz:2.8},
+  {note:'E4',label:'Mi acuto — corda sottile',hz:'330 Hz',freq:329.6, color:'#D85A30',thick:1.8,visHz:5.2},
+];
+const SPL=62,SPR=18;
+let W=0,H=300,strY=[],cymX=0,cymY=0,cymRX=0,cymRY=0;
+const sS=STRINGS.map(()=>({t0:null,amp:0}));
+const cS={t0:null,amp:0};
+let waves=[],cymRings=[],audioCtx=null;
+
+function resize(){
+  W=canvas.offsetWidth||640;H=300;canvas.width=W;canvas.height=H;
+  const sw=W*0.56;
+  strY=[H*0.33,H*0.67];
+  cymX=W*0.775;cymY=H*0.38;cymRX=Math.min(W*0.13,80);cymRY=cymRX*0.28;
+}
+function playStr(s){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const t=audioCtx.currentTime,DUR=2.8;
+    [1,2,3].forEach((h,i)=>{
+      const osc=audioCtx.createOscillator(),g=audioCtx.createGain(),comp=audioCtx.createDynamicsCompressor();
+      comp.threshold.value=-18;osc.type=i===0?'triangle':'sine';osc.frequency.value=s.freq*h;
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime([0.30,0.22,0.08][i],t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001,t+DUR*[1,0.7,0.5][i]);
+      osc.connect(g);g.connect(comp);comp.connect(audioCtx.destination);osc.start(t);osc.stop(t+DUR);
+    });
+  }catch(e){}
+}
+function playCym(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const t=audioCtx.currentTime,DUR=2.2,out=audioCtx.createDynamicsCompressor();
+    out.threshold.value=-14;out.connect(audioCtx.destination);
+    [3520,4752,6240,8400,11200,14800].forEach((f,i)=>{
+      const osc=audioCtx.createOscillator(),g=audioCtx.createGain();
+      osc.type='square';osc.frequency.value=f;
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.028-i*0.003,t+0.004);
+      g.gain.exponentialRampToValueAtTime(0.001,t+DUR*(0.9-i*0.1));
+      osc.connect(g);g.connect(out);osc.start(t);osc.stop(t+DUR);
+    });
+    const SR=audioCtx.sampleRate,buf=audioCtx.createBuffer(1,SR*DUR,SR),d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+    const src=audioCtx.createBufferSource();src.buffer=buf;
+    const hpf=audioCtx.createBiquadFilter();hpf.type='highpass';hpf.frequency.value=4800;
+    const bpf=audioCtx.createBiquadFilter();bpf.type='bandpass';bpf.frequency.value=9000;bpf.Q.value=0.4;
+    const ng=audioCtx.createGain();
+    ng.gain.setValueAtTime(0,t);ng.gain.linearRampToValueAtTime(0.38,t+0.006);
+    ng.gain.exponentialRampToValueAtTime(0.001,t+DUR);
+    src.connect(hpf);hpf.connect(bpf);bpf.connect(ng);ng.connect(out);src.start(t);src.stop(t+DUR);
+  }catch(e){}
+}
+function hexA(h,a){return h+Math.max(0,Math.min(255,Math.round(a*255))).toString(16).padStart(2,'0');}
+function drawCym(now){
+  const st=cS;let elapsed=0,da=0;
+  if(st.t0!==null){elapsed=(now-st.t0)/1000;da=elapsed<2.6?st.amp*Math.exp(-elapsed/0.9):0;if(da<0.05&&elapsed>2)st.t0=null;}
+  const wobY=da>0.2?da*0.012*Math.sin(14*Math.PI*elapsed):0,curRY=cymRY*(1+wobY);
+  ctx.beginPath();ctx.moveTo(cymX,cymY+curRY+2);ctx.lineTo(cymX,cymY+curRY+H*0.42);
+  ctx.strokeStyle=hexA('#888',0.5);ctx.lineWidth=2.5;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cymX-18,cymY+curRY+H*0.42);ctx.lineTo(cymX+18,cymY+curRY+H*0.42);
+  ctx.strokeStyle=hexA('#888',0.4);ctx.lineWidth=3;ctx.lineCap='round';ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cymX-cymRX*0.55,cymY+curRY+2);ctx.lineTo(cymX,cymY+curRY+2);
+  ctx.strokeStyle=hexA('#777',0.35);ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cymX-cymRX*0.55,cymY+curRY+2);ctx.lineTo(cymX-cymRX*0.55,cymY+curRY+H*0.35);
+  ctx.strokeStyle=hexA('#777',0.35);ctx.lineWidth=2;ctx.stroke();
+  if(da>1){ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX*1.18,curRY*1.18+da*0.08,0,0,Math.PI*2);ctx.fillStyle=hexA('#E6C137',da/st.amp*0.18);ctx.fill();}
+  const g=ctx.createRadialGradient(cymX-cymRX*0.25,cymY-curRY*0.3,cymRX*0.05,cymX,cymY,cymRX);
+  const br=da>0.5?Math.min(1,0.85+da/st.amp*0.15):0.85;
+  g.addColorStop(0,hexA('#F0D060',br));g.addColorStop(0.35,hexA('#D4A820',br));
+  g.addColorStop(0.75,hexA('#B8901A',br));g.addColorStop(1,hexA('#9A7810',br));
+  ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX,curRY,0,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  [0.72,0.50,0.32].forEach(r=>{ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX*r,curRY*r,0,0,Math.PI*2);ctx.strokeStyle=hexA('#88640A',0.35);ctx.lineWidth=0.8;ctx.stroke();});
+  const bg2=ctx.createRadialGradient(cymX-cymRX*0.06,cymY-curRY*0.4,cymRX*0.01,cymX,cymY,cymRX*0.20);
+  bg2.addColorStop(0,'#FFF0A0');bg2.addColorStop(0.6,'#E8C830');bg2.addColorStop(1,'#C4A020');
+  ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX*0.20,curRY*0.9,0,0,Math.PI*2);ctx.fillStyle=bg2;ctx.fill();
+  ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX*0.20,curRY*0.9,0,0,Math.PI*2);ctx.strokeStyle=hexA('#A08010',0.5);ctx.lineWidth=1;ctx.stroke();
+  ctx.beginPath();ctx.ellipse(cymX-cymRX*0.28,cymY-curRY*0.38,cymRX*0.2,curRY*0.22,-0.3,0,Math.PI*2);ctx.fillStyle=hexA('#FFFFFF',da>0.5?0.22:0.12);ctx.fill();
+  ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX,curRY,0,0,Math.PI*2);ctx.strokeStyle=hexA('#9A7810',da>1?0.9:0.6);ctx.lineWidth=da>1?2:1.2;ctx.stroke();
+  cymRings=cymRings.filter(r=>r.p<1);
+  cymRings.forEach(r=>{ctx.beginPath();ctx.ellipse(cymX,cymY,cymRX*r.p*0.85,curRY*r.p*0.85,0,0,Math.PI*2);ctx.strokeStyle=hexA('#FFFFFF',(1-r.p)*0.45);ctx.lineWidth=1.5;ctx.stroke();r.p+=0.018;});
+  ctx.font='500 12px system-ui';ctx.fillStyle=da>1?hexA('#C9A020',0.9):hexA('#888',0.45);ctx.textAlign='center';ctx.fillText('PIATTO',cymX,cymY+curRY+22);
+}
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#F6FAFE';ctx.fillRect(0,0,W,H);
+  const sw=W*0.56;
+  ctx.fillStyle='rgba(0,0,0,0.04)';ctx.fillRect(sw,0,1,H);
+  for(let f=0;f<4;f++){const fx=SPL+(sw-SPL-SPR)*((f+1)/5);ctx.fillStyle='rgba(0,0,0,0.03)';ctx.fillRect(fx-1,8,2,H-16);}
+  ctx.fillStyle='#c0d4e8';ctx.fillRect(SPL-4,8,5,H-16);ctx.fillRect(sw-SPR-1,8,5,H-16);
+  const L=sw-SPL-SPR,SDUR=2.8;
+  STRINGS.forEach((s,i)=>{
+    const st=sS[i];let elapsed=0,da=0;
+    if(st.t0!==null){elapsed=(now-st.t0)/1000;da=elapsed<SDUR+0.4?st.amp*Math.exp(-elapsed/1.05):0;if(da<0.08&&elapsed>2)st.t0=null;}
+    ctx.beginPath();
+    if(da>0.15){
+      const f1=s.visHz*2*Math.PI,f2=f1*2;
+      for(let px=0;px<=L;px+=2){const p=px/L,yO=da*(Math.sin(Math.PI*p)*Math.cos(f1*elapsed)+Math.sin(2*Math.PI*p)*Math.cos(f2*elapsed)*0.20);px===0?ctx.moveTo(SPL+px,strY[i]+yO):ctx.lineTo(SPL+px,strY[i]+yO);}
+    } else {ctx.moveTo(SPL,strY[i]);ctx.lineTo(sw-SPR,strY[i]);}
+    ctx.strokeStyle=hexA(s.color,da>0.5?Math.min(1,0.65+(da/st.amp)*0.35):0.65);
+    ctx.lineWidth=s.thick*(da>0.5?1+(da/st.amp)*0.45:1);ctx.lineCap='round';ctx.stroke();
+    if(da>2){ctx.beginPath();if(da>0.5){const f1=s.visHz*2*Math.PI;for(let px=0;px<=L;px+=4){const p=px/L,yO=da*Math.sin(Math.PI*p)*Math.cos(f1*elapsed);px===0?ctx.moveTo(SPL+px,strY[i]+yO):ctx.lineTo(SPL+px,strY[i]+yO);}}else{ctx.moveTo(SPL,strY[i]);ctx.lineTo(sw-SPR,strY[i]);}ctx.strokeStyle=hexA(s.color,0.15);ctx.lineWidth=s.thick*3.5;ctx.lineCap='round';ctx.stroke();}
+    ctx.textAlign='right';ctx.font='500 13px system-ui';ctx.fillStyle=da>1?hexA(s.color,0.9):'rgba(0,0,0,0.38)';ctx.fillText(s.note,SPL-9,strY[i]+5);
+    ctx.textAlign='left';ctx.font='11px system-ui';ctx.fillStyle=da>1?hexA(s.color,0.7):'rgba(0,0,0,0.26)';ctx.fillText(s.hz,sw-SPR+8,strY[i]+5);
+  });
+  waves=waves.filter(w=>w.r<200&&w.a>0.01);waves.forEach(w=>{ctx.beginPath();ctx.arc(sw*0.5,w.y,w.r,0,Math.PI*2);ctx.strokeStyle=hexA(w.color,w.a);ctx.lineWidth=1.1;ctx.stroke();w.r+=2;w.a*=0.970;});
+  drawCym(now);
+  requestAnimationFrame(draw);
+}
+function inEll(mx,my,cx,cy,rx,ry){return((mx-cx)**2/((rx+14)**2)+((my-cy)**2/((ry+10)**2))<=1);}
+function hitStr(my){let b=null,bd=Infinity;strY.forEach((y,i)=>{const d=Math.abs(my-y);if(d<26&&d<bd){b=i;bd=d;}});return b;}
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect(),sx=canvas.width/r.width,sy=canvas.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  const si=hitStr(my);
+  if(si!==null&&mx<W*0.57){
+    const s=STRINGS[si];sS[si]={t0:performance.now(),amp:22};
+    for(let r=0;r<4;r++)waves.push({y:strY[si],r:r*26,color:s.color,a:0.30-r*0.06});
+    playStr(s);
+    document.getElementById('whoName').textContent=s.note+' — '+s.label;document.getElementById('whoName').style.color=s.color;
+    document.getElementById('infoText').innerHTML='<strong>Corda tesa: '+s.hz+'.</strong> La corda vibra '+Math.round(s.freq)+' volte al secondo. Corde più spesse e più lunghe producono suoni più gravi.';return;
+  }
+  if(inEll(mx,my,cymX,cymY,cymRX,cymRY)){
+    cS.t0=performance.now();cS.amp=22;for(let r=0;r<5;r++)cymRings.push({p:r*0.12});playCym();
+    document.getElementById('whoName').textContent='Piatto (crash cymbal)';document.getElementById('whoName').style.color='#C9A020';
+    document.getElementById('infoText').innerHTML='<strong>Metallo percosso.</strong> Il piatto vibra in modo complesso: produce molte frequenze contemporaneamente. Il "fruscio" metallico è fatto di centinaia di frequenze sovrapposte.';
+  }
+});
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect(),sx=canvas.width/r.width,sy=canvas.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  canvas.style.cursor=(hitStr(my)!==null&&mx<W*0.57)||inEll(mx,my,cymX,cymY,cymRX,cymRY)?'pointer':'default';
+});
+window.addEventListener('resize',resize);resize();requestAnimationFrame(draw);
+</script>
+</body>
+</html>
